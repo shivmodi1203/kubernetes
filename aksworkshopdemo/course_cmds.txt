@@ -1,0 +1,66 @@
+#################################################################################
+# Retrieve the cluster credentials by running the command below
+az aks get-credentials \
+    --resource-group $RESOURCE_GROUP \
+    --name $AKS_CLUSTER_NAME
+
+#################################################################################
+
+# Clone the repository ratings-api
+git clone https://github.com/MicrosoftDocs/mslearn-aks-workshop-ratings-api.git
+
+# Clone the repository ratings-web
+git clone https://github.com/MicrosoftDocs/mslearn-aks-workshop-ratings-web.git
+
+#################################################################################
+
+######### HINT PLEASE READ FIRST #########################
+Hint: the helm command arguments changes depends the version of the mongodb installed. 
+Make sure to run the command "helm show chart bitnami/mongodb" and check the version of the mongodb, 
+and check the documentation for the updated args names "https://hub.helm.sh/charts/bitnami/mongodb". 
+
+For example, Authentication parameters are reorganized: 
+mongodbUsername, mongodbPassword and mongodbDatabase are now auth.username, auth.password, auth.database
+
+#########################
+
+# Configure the Helm client to use the stable repository 
+helm repo add bitnami https://charts.bitnami.com/bitnami
+
+# Install Mongo DB 
+helm install ratings bitnami/mongodb \
+    --namespace ratingsapp \
+    --set mongodbUsername=<username>,mongodbPassword=<password>,mongodbDatabase=ratingsdb
+
+# Create a secret called mongosecret
+kubectl create secret generic mongosecret \
+    --namespace ratingsapp \
+    --from-literal=MONGOCONNECTION="mongodb://<username>:<password>@ratings-mongodb.ratingsapp:27017/ratingsdb"
+
+#################################################################################
+
+# Configure the Helm client to get NGINIX
+helm repo add stable https://kubernetes-charts.storage.googleapis.com/
+
+# Install the NGINX ingress controller
+helm install nginx-ingress stable/nginx-ingress \
+    --namespace ingress \
+    --set controller.replicaCount=2 \
+    --set controller.nodeSelector."beta\.kubernetes\.io/os"=linux \
+    --set defaultBackend.nodeSelector."beta\.kubernetes\.io/os"=linux
+
+#################################################################################
+
+# Perpare Helm for installing cert_manager module in k8s
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+
+# Install cert_manager on the k8s aks cluster
+kubectl apply --validate=false -f https://raw.githubusercontent.com/jetstack/cert-manager/release-0.14/deploy/manifests/00-crds.yaml
+
+# Install cert_manager using Helm
+helm install cert-manager \
+    --namespace cert-manager \
+    --version v0.14.0 \
+    jetstack/cert-manager
+
